@@ -110,10 +110,12 @@ void TextEditorWindow::UpdateVertScroll(int scrollIncrease)
 
 	if (scrollIncrease) 
 	{
+		//this->yCaretEditAreaPos_ -= scrollIncrease;
+
 		int yStep = this->textMetrics_.tmHeight + this->textMetrics_.tmExternalLeading;
 
-		ScrollWindow(this->hWnd, 0, -yStep * scrollIncrease, &this->textAreaEditRect_, &this->textAreaEditRect_);
 		UpdateWindow(this->hWnd);
+		ScrollWindow(this->hWnd, 0, -yStep * scrollIncrease, &this->textAreaEditRect_, &this->textAreaEditRect_);
 
 		this->vertScrollInfo_.nPos += scrollIncrease;
 		SetScrollInfo(this->vertSBC_, SB_CTL, &this->vertScrollInfo_, TRUE);
@@ -122,9 +124,25 @@ void TextEditorWindow::UpdateVertScroll(int scrollIncrease)
 		UpdateWindow(this->hWnd);
 	}
 }
+
 void TextEditorWindow::UpdateHorzScroll(int scrollIncrease)
 {
+}
 
+
+void TextEditorWindow::UpdateCaretPosition()
+{
+	int yStep = this->textMetrics_.tmHeight + this->textMetrics_.tmExternalLeading;
+
+	SetCaretPos(
+		this->xCaretEditAreaPos_ * this->textMetrics_.tmAveCharWidth + this->xStartWritePos_,
+		this->xCaretEditAreaPos_ * yStep + this->yStartWritePos_
+		);
+
+	//if (this->isCaretVisible_)
+	//{
+	//	ShowCaret(hWnd);
+	//}
 }
 
 void TextEditorWindow::PrintText(HDC deviceContext)
@@ -151,10 +169,14 @@ void TextEditorWindow::PrintText(HDC deviceContext)
 			);
 
 		++i;
-		//DrawText(deviceContext, line.c_str(), -1, &editorWindow->textAreaEditRect_, /*DT_CENTER | DT_VCENTER | DT_SINGLELINE*/DT_LEFT);
 	}
 }
 
+//void TextEditorWindow::AdjustWhenCaretInvisible()
+//{
+//	int diff = this->yCaretTextPosition_ - this->vertScrollInfo_.nPos;
+//	this->UpdateVertScroll(diff);
+//}
 
 
 TextEditorWindow::TextEditorWindow(
@@ -174,7 +196,8 @@ TextEditorWindow::TextEditorWindow(
 	margin_(10),
 	textMargin_(10),
 	myMenyHeight_(40),
-	scrollBoxWidth_(10)
+	scrollBoxWidth_(10),
+	isCaretVisible_(true)
 {
 	char szClassName[] = "KWndClass";
 
@@ -203,45 +226,53 @@ TextEditorWindow::TextEditorWindow(
 	this->SetTextAreaBorderRect(clientRect);
 	this->SetTextAreaEditRect();
 
-	this->textLines_.push_back("Hello everyone! My name is Ivan and I'm very glad to see you!");
-	this->textLines_.push_back("And what about  you?");
-	this->textLines_.push_back("London is a capital of Great Britain");
-	this->textLines_.push_back("No comments");
-	this->textLines_.push_back("if(a > b && c < d) a = b;");
+	/* in final version must be: */
+	//this->textLines_.push_back("Hello everyone! My name is Ivan and I'm very glad to see you!");
 
-	this->textLines_.push_back("Hello everyone! My name is Ivan and I'm very glad to see you!");
-	this->textLines_.push_back("And what about  you?");
-	this->textLines_.push_back("London is a capital of Great Britain");
-	this->textLines_.push_back("No comments");
-	this->textLines_.push_back("if(a > b && c < d) a = b;");
-	this->textLines_.push_back("Hello everyone! My name is Ivan and I'm very glad to see you!");
-	this->textLines_.push_back("And what about  you?");
-	this->textLines_.push_back("London is a capital of Great Britain");
-	this->textLines_.push_back("No comments");
-	this->textLines_.push_back("if(a > b && c < d) a = b;");
-	this->textLines_.push_back("Hello everyone! My name is Ivan and I'm very glad to see you!");
-	this->textLines_.push_back("And what about  you?");
-	this->textLines_.push_back("London is a capital of Great Britain");
-	this->textLines_.push_back("No comments");
-	this->textLines_.push_back("if(a > b && c < d) a = b;");
-	this->textLines_.push_back("Hello everyone! My name is Ivan and I'm very glad to see you!");
-	this->textLines_.push_back("And what about  you?");
-	this->textLines_.push_back("London is a capital of Great Britain");
-	this->textLines_.push_back("No comments");
-	this->textLines_.push_back("if(a > b && c < d) a = b;");
-	this->textLines_.push_back("Hello everyone! My name is Ivan and I'm very glad to see you!");
-	this->textLines_.push_back("And what about  you?");
-	this->textLines_.push_back("London is a capital of Great Britain");
-	this->textLines_.push_back("No comments");
-	this->textLines_.push_back("if(a > b && c < d) a = b;");
+	/* hardcoded for testing: */
+	this->textLines_.push_back("1. Hello everyone! My name is Ivan and I'm very glad to see you!");
+	this->textLines_.push_back("2. And what about  you?");
+	this->textLines_.push_back("3. London is a capital of Great Britain");
+	this->textLines_.push_back("4. No comments");
+	this->textLines_.push_back("5. if(a > b && c < d) a = b;");
+	this->textLines_.push_back("");
+	this->textLines_.push_back("The earliest written record of a windmill is from Yorkshire, England, dated 1185.");
+	this->textLines_.push_back("Paper manufacture began in Italy around 1270.");
+	this->textLines_.push_back("The spinning wheel was brought to Europe (probably from India) in the 13th century.");
+	this->textLines_.push_back("The magnetic compass aided navigation, first reaching Europe some time in the late 12th century.");
+	this->textLines_.push_back("Eyeglasses were invented in Italy in the late 1280s.");
+	this->textLines_.push_back("The astrolabe returned to Europe via Islamic Spain.");
+	this->textLines_.push_back("Leonardo of Pisa introduces Arabic numerals to Europe with his book Liber Abaci in 1202.");
+	this->textLines_.push_back("The West's oldest known depiction of a stern-mounted rudder can be found on church carvings dating to around 1180.");
+	this->textLines_.push_back("Art in the High Middle Ages includes these important movements:");
+	this->textLines_.push_back("Anglo-Saxon art was influential on the British Isles until the Norman Invasion of 1066");
+	this->textLines_.push_back("Romanesque art continued traditions from the Classical world (not to be confused with Romanesque architecture)");
+	this->textLines_.push_back("Gothic art developed a distinct Germanic flavor(not to be confused with Gothic architecture).");
+	this->textLines_.push_back("Byzantine art continued earlier Byzantine traditions, influencing much of Eastern Europe.");
+	this->textLines_.push_back("Illuminated manuscripts gained prominence both in the Catholic and Orthodox churches");
+	this->textLines_.push_back("Dates:");
+	this->textLines_.push_back("1003 — death of Pope Sylvester II");
+	this->textLines_.push_back("1018 — the First Bulgarian Empire is conquered by the Byzantine Empire under Basil II.");
+	this->textLines_.push_back("1027 — the Salian Conrad II succeeds the last Ottonian Henry II the Saint");
+	this->textLines_.push_back("1054 — East-West Schism");
+	this->textLines_.push_back("1066 — Battle of Hastings");
+	this->textLines_.push_back("1066 – 1067 Bayeux Tapestry");
+	this->textLines_.push_back("1073 – 1085 — Pope Gregory VII");
+	this->textLines_.push_back("1071 — Battle of Manzikert");
+	this->textLines_.push_back("1077 — Henry IV's Walk to Canossa");
+	this->textLines_.push_back("1086 — Domesday Book");
+	this->textLines_.push_back("1088 — University of Bologna founded");
 
 	this->xStartWritePos_ = this->textAreaEditRect_.left;
 	this->yStartWritePos_ = this->textAreaEditRect_.top;
 
-	this->xCaret_ = 0;
-	this->yCaret_ = 0;
+	this->xCaretEditAreaPos_ = 0;
+	this->yCaretEditAreaPos_ = 0;
 
+	//this->isCaretVisible_ = true;
 
+	this->xCaretTextPosition_ = 0;
+	this->yCaretTextPosition_ = 0;
 
 	/* creating scroll bar controls*/
 	
@@ -313,370 +344,4 @@ HWND TextEditorWindow::GetHWnd()
 
 
 
-
-
-
-
-
 map<HWND, TextEditorWindow*> TextEditorWindow::hwndTextEditorWndMap;
-
-// window procedure definition;
-LRESULT CALLBACK TextEditorWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
-{
-	TextEditorWindow* editorWindow = TextEditorWindow::hwndTextEditorWndMap[hWnd];
-
-	switch (uMsg)
-	{
-	case WM_CREATE: {
-
-	} break;
-
-
-	case WM_SIZE: {
-					  RECT newClientRect;
-					  GetClientRect(hWnd, &newClientRect);
-
-					  editorWindow->SetMyMenuSize(newClientRect);
-					  editorWindow->SetTextAreaBorderRect(newClientRect);
-					  editorWindow->SetTextAreaEditRect();
-					  editorWindow->UpdateScrollBarControlsPosition();
-
-					  editorWindow->UpdateScrollInfo();
-	} break;
-
-	case WM_PAINT: {
-					   PAINTSTRUCT paintStruct;
-					   HDC deviceContext = BeginPaint(hWnd, &paintStruct);
-
-					   Rectangle(
-						   deviceContext,
-						   editorWindow->myMenuRect_.left,
-						   editorWindow->myMenuRect_.top,
-						   editorWindow->myMenuRect_.right,
-						   editorWindow->myMenuRect_.bottom
-						   );
-
-					   Rectangle(
-						   deviceContext,
-						   editorWindow->textAreaBorderRect_.left,
-						   editorWindow->textAreaBorderRect_.top,
-						   editorWindow->textAreaBorderRect_.right,
-						   editorWindow->textAreaBorderRect_.bottom
-						   );
-
-
-
-					   //RECT clientRect;
-					   //GetClientRect(hWnd, &clientRect);
-					   //
-					   //int clientRectWidth = clientRect.right - clientRect.left;
-					   //int clientRectHeight = clientRect.bottom - clientRect.top;
-					   //
-					   //string text = "";
-					   //text = "Client Rectangle width = " + to_string(clientRectWidth)   + ", height = " + to_string(clientRectHeight);
-
-					   
-					   SelectObject(deviceContext, GetStockObject(SYSTEM_FIXED_FONT));
-
-					   //for (int i = 0; i < editorWindow->textLines_.size(); ++i)
-					   //{
-						//   ExtTextOut(
-						//	   deviceContext,
-						//	   editorWindow->textAreaEditRect_.left,
-						//	   editorWindow->textAreaEditRect_.top + i * editorWindow->textMetrics_.tmHeight,
-						//	   ETO_CLIPPED,
-						//	   &editorWindow->textAreaEditRect_,
-						//	   editorWindow->textLines_[i].c_str(),
-						//	   editorWindow->textLines_[i].length(), 
-						//	   NULL
-						//	   );
-						//   //DrawText(deviceContext, line.c_str(), -1, &editorWindow->textAreaEditRect_, /*DT_CENTER | DT_VCENTER | DT_SINGLELINE*/DT_LEFT);
-					   //}
-
-					   editorWindow->PrintText(deviceContext);
-					   
-					   EndPaint(hWnd, &paintStruct);
-	} break;
-
-	case WM_LBUTTONDOWN: {
-							 int cursorXPos = LOWORD(lParam);
-							 int cursorYPos = HIWORD(lParam);
-
-							 if (editorWindow->textAreaEditRect_.left < cursorXPos && cursorXPos < editorWindow->textAreaEditRect_.right &&
-								 editorWindow->textAreaEditRect_.top < cursorYPos && cursorYPos < editorWindow->textAreaEditRect_.bottom)
-							 {
-								 const int offset = 2;
-								 int yStep = editorWindow->textMetrics_.tmHeight + editorWindow->textMetrics_.tmExternalLeading;
-								 
-								 int realLogicalX = (cursorXPos - editorWindow->textAreaEditRect_.left + offset) / editorWindow->textMetrics_.tmAveCharWidth;
-								 int realLogicalY = (cursorYPos - editorWindow->textAreaEditRect_.top + offset) / yStep;
-
-
-								 editorWindow->yCaret_ =
-									 (realLogicalY < editorWindow->textLines_.size()) ? realLogicalY : editorWindow->textLines_.size() - 1;
-								 
-								 int currLineLen = editorWindow->textLines_[editorWindow->yCaret_].length();
-								 
-								 editorWindow->xCaret_ =
-									 (realLogicalX < currLineLen) ? realLogicalX : currLineLen;
-							 }
-
-							 SendMessage(hWnd, WM_SETFOCUS, wParam, lParam);
-	} break;
-
-	case WM_SETFOCUS: {
-						  int yStep = editorWindow->textMetrics_.tmHeight + editorWindow->textMetrics_.tmExternalLeading;
-
-						  CreateCaret(hWnd, NULL, 1, yStep);
-						  SetCaretPos(
-							  editorWindow->textMetrics_.tmAveCharWidth * editorWindow->xCaret_ + editorWindow->xStartWritePos_,
-							  yStep * editorWindow->yCaret_ + editorWindow->yStartWritePos_
-							  );
-						  ShowCaret(hWnd);
-	} break;
-
-	case WM_KILLFOCUS: {
-						   HideCaret(hWnd);
-						   DestroyCaret();
-	} break;
-
-	case WM_VSCROLL: {
-						 int scrollIncrease = 0;
-
-						 switch (LOWORD(wParam)) 
-						 {
-						 case SB_LINEUP:
-							 scrollIncrease = -1; 
-							 break;
-
-						 case SB_LINEDOWN:
-							 scrollIncrease = 1; 
-							 break;
-
-						 case SB_PAGEUP:
-							 scrollIncrease = -(int)editorWindow->vertScrollInfo_.nPage; 
-							 break;
-
-						 case SB_PAGEDOWN:
-							 scrollIncrease = (int)editorWindow->vertScrollInfo_.nPage; 
-							 break;
-
-						 case SB_THUMBTRACK:
-							 scrollIncrease = HIWORD(wParam) - editorWindow->vertScrollInfo_.nPos; 
-							 break;
-
-						 default: scrollIncrease = 0;
-						 }
-
-						 editorWindow->UpdateVertScroll(scrollIncrease);
-	} break;
-
-	case WM_KEYDOWN: {
-						 int currXPos = editorWindow->xCaret_;
-						 int currYPos = editorWindow->yCaret_;
-						 
-						 switch (wParam)
-						 {
-						 case VK_LEFT: {
-										   if (currXPos == 0 && currYPos == 0)
-											   break;
-
-										   if (currXPos == 0)
-										   {
-											   editorWindow->xCaret_ = editorWindow->textLines_[currYPos - 1].length();
-											   --editorWindow->yCaret_;
-											   break;
-										   }
-
-										   --editorWindow->xCaret_;
-						 } break;
-
-						 case VK_RIGHT: {
-											if (currXPos == editorWindow->textLines_[currYPos].length() &&
-												currYPos == editorWindow->textLines_.size() - 1)
-											{
-												break;
-											}
-
-											if (currXPos == editorWindow->textLines_[currYPos].length())
-											{
-												editorWindow->xCaret_ = 0;
-												++editorWindow->yCaret_;
-												break;
-											}
-
-											++editorWindow->xCaret_;
-						 } break;
-
-						 case VK_UP: {
-
-										 if (currYPos == 0)
-										 {
-											 break;
-										 }
-
-										 if (currXPos > editorWindow->textLines_[currYPos - 1].length())
-										 {
-											 editorWindow->xCaret_ = editorWindow->textLines_[currYPos - 1].length();
-											 --editorWindow->yCaret_;
-											 break;
-										 }
-
-										 --editorWindow->yCaret_;
-						 } break;
-
-						 case VK_DOWN: {
-										   if (currYPos == editorWindow->textLines_.size() - 1)
-										   {
-											   break;
-										   }
-
-										   if (currXPos > editorWindow->textLines_[currYPos + 1].length())
-										   {
-											   editorWindow->xCaret_ = editorWindow->textLines_[currYPos + 1].length();
-											   ++editorWindow->yCaret_;
-											   break;
-										   }
-										   
-										   ++editorWindow->yCaret_;
-						 } break;
-
-						 case VK_DELETE: {
-											 if (currYPos == editorWindow->textLines_.size() - 1 &&
-												 currXPos == editorWindow->textLines_[currYPos].length())
-											 {
-												 break;
-											 }
-
-											 if (currXPos == editorWindow->textLines_[currYPos].length())
-											 {
-												 editorWindow->textLines_[currYPos] += editorWindow->textLines_[currYPos + 1];
-
-												 auto iter = editorWindow->textLines_.begin();
-												 for (int i = 0; i < currYPos + 1; ++i)
-												 {
-													 ++iter;
-												 }
-
-												 editorWindow->textLines_.erase(iter);
-											 }
-											 else
-											 {
-												 editorWindow->textLines_[currYPos].erase(currXPos, 1);
-											 }
-
-											 InvalidateRect(hWnd, &editorWindow->textAreaEditRect_, TRUE);
-						 } break;
-						 }
-
-						 int yStep = editorWindow->textMetrics_.tmHeight + editorWindow->textMetrics_.tmExternalLeading;
-
-						 SetCaretPos(
-							 editorWindow->xCaret_ * editorWindow->textMetrics_.tmAveCharWidth + editorWindow->xStartWritePos_,
-							 editorWindow->yCaret_ * yStep + editorWindow->yStartWritePos_
-							 );
-	} break;
-
-	case WM_CHAR: {
-					  int currXPos = editorWindow->xCaret_;
-					  int currYPos = editorWindow->yCaret_;
-
-					  int yStep = editorWindow->textMetrics_.tmHeight + editorWindow->textMetrics_.tmExternalLeading;
-
-					  switch (wParam)
-					  {
-					  case '\b': { // backspace;
-									 if (currXPos == 0 && currYPos == 0)
-										 break;
-
-									 if (currXPos == 0)
-									 {
-										 --editorWindow->yCaret_;
-										 editorWindow->xCaret_ = editorWindow->textLines_[currYPos - 1].length();
-
-										 editorWindow->textLines_[currYPos - 1] += editorWindow->textLines_[currYPos];
-
-										 auto iter = editorWindow->textLines_.begin();
-										 for (int i = 0; i < currYPos; ++i)
-										 {
-											 ++iter;
-										 }
-
-										 editorWindow->textLines_.erase(iter);
-									 }
-									 else
-									 {
-										 editorWindow->textLines_[currYPos].erase(currXPos - 1, 1);
-										 
-										 --editorWindow->xCaret_;
-									 }
-									 
-									 SetCaretPos(
-										 editorWindow->xCaret_ * editorWindow->textMetrics_.tmAveCharWidth + editorWindow->xStartWritePos_,
-										 editorWindow->yCaret_ * yStep + editorWindow->yStartWritePos_
-										 );
-
-									 InvalidateRect(hWnd, &editorWindow->textAreaEditRect_, TRUE);
-					  } break;
-
-					  case '\t': {
-									 do
-									 {
-									   SendMessage(hWnd, WM_CHAR, ' ', 1L);
-									 } while (editorWindow->xCaret_ % 8 != 0);
-					  } break;
-
-					  case '\r': 
-					  case '\n': { // new line character;
-									 string textToMove = editorWindow->textLines_[currYPos].substr(currXPos);
-									 editorWindow->textLines_[currYPos].erase(currXPos);
-
-									 auto iter = editorWindow->textLines_.begin();
-									 for (int i = 0; i < currYPos + 1; ++i)
-									 {
-										 ++iter;
-									 }
-
-									 editorWindow->textLines_.insert(iter, textToMove);
-
-									 editorWindow->xCaret_ = 0;
-									 ++editorWindow->yCaret_;
-
-									 SetCaretPos(
-										 editorWindow->xCaret_ * editorWindow->textMetrics_.tmAveCharWidth + editorWindow->xStartWritePos_,
-										 editorWindow->yCaret_ * yStep + editorWindow->yStartWritePos_
-										 );
-
-									 InvalidateRect(hWnd, &editorWindow->textAreaEditRect_, TRUE);
-					  } break;
-
-					  default: { // any other character;
-								   char symbol = (char)wParam;
-								   editorWindow->textLines_[currYPos].insert(currXPos, 1, symbol);
-
-								   ++editorWindow->xCaret_;
-
-								   SetCaretPos(
-									   editorWindow->xCaret_ * editorWindow->textMetrics_.tmAveCharWidth + editorWindow->xStartWritePos_,
-									   editorWindow->yCaret_ * yStep + editorWindow->yStartWritePos_
-									   );
-
-								   InvalidateRect(hWnd, &editorWindow->textAreaEditRect_, TRUE);
-					  } break;
-					  }
-	} break;
-
-	case WM_CLOSE: {
-					   DestroyWindow(hWnd);
-	} break;
-
-	case WM_DESTROY:{
-						PostQuitMessage(0);
-	} break;
-
-	default:
-		return DefWindowProc(hWnd, uMsg, wParam, lParam);
-	}
-
-	return 0;
-}

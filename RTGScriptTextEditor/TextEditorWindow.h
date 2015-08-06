@@ -37,11 +37,19 @@ private: // fileds;
 	int xStartWritePos_;
 	int yStartWritePos_;
 
-	// logical caret x position;
-	int xCaret_;
+	/* 
+	logical caret position on the text edit area; can be both positive and negative;
+	*/
+	int xCaretEditAreaPos_;
+	int yCaretEditAreaPos_;
+	
+	bool isCaretVisible_;
 
-	// logical caret y position;
-	int yCaret_;
+	/*
+	logical caret position in terms of text lines and characters positions;
+	*/
+	int xCaretTextPosition_;
+	int yCaretTextPosition_;
 
 	TEXTMETRIC textMetrics_;
 
@@ -59,7 +67,12 @@ private: // methods;
 	void UpdateVertScroll(int scrollIncrease);
 	void UpdateHorzScroll(int scrollIncrease);
 
+	void UpdateCaretPosition();
+
 	void PrintText(HDC deviceContext);
+
+	//void AdjustWhenCaretInvisible();
+
 
 public: // methods;
 	TextEditorWindow(
