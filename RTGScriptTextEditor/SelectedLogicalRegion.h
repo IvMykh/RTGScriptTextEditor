@@ -8,5 +8,6 @@ public: // fields;
 	int logicRight_;
 
 public: // methods;
+	SelectedTextRegion();
 	SelectedTextRegion(const int lu, const int ll, const int ld, const int lr);
 };

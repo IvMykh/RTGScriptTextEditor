@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "SelectedLogicalRegion.h"
 
 // TODO: scrolling; ctrl+c; ctrl+v; ctrl+z;
 // ! consider tm->tmExternalLeading later; 
@@ -14,8 +15,12 @@ class TextEditorWindow
 {
 	/*instance members*/
 private: // fileds;
-	HWND hWnd;
 	WNDCLASSEX wc;
+	HWND hWnd;
+	
+	// device context for selecting;
+	HDC deviceContext_; // ! is got in WM_CREATE handler and is released in WM_DESTROY;
+
 
 	HWND vertSBC_;
 	SCROLLINFO vertScrollInfo_;
@@ -53,6 +58,11 @@ private: // fileds;
 
 	TEXTMETRIC textMetrics_;
 
+	// selecting text;
+	SelectedTextRegion selTextReg_;
+	bool isMouseTracked_;
+
+
 private: // methods;
 	void RegisterWindowClass(char* className, UINT classStyle, LRESULT(WINAPI *WndProc)(HWND, UINT, WPARAM, LPARAM), HINSTANCE hInst);
 	
@@ -70,6 +80,10 @@ private: // methods;
 	void UpdateCaretPosition();
 
 	void PrintText(HDC deviceContext);
+	//
+	void ShowSelectedText(const bool shouldBeColored);
+	//
+
 
 	//void AdjustWhenCaretInvisible();
 
@@ -93,7 +107,7 @@ public: // methods;
 	HWND GetHWnd();
 
 
-
+	~TextEditorWindow();
 
 	/*static members*/
 private: // fields;

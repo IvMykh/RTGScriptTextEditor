@@ -2,16 +2,17 @@
 
 using namespace std;
 
+// TODO: selecting text;
+
 // window procedure definition;
 LRESULT CALLBACK TextEditorWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	TextEditorWindow* editorWindow = TextEditorWindow::hwndTextEditorWndMap[hWnd];
 
+
 	switch (uMsg)
 	{
-	case WM_CREATE: {
-						
-	} break;
+	case WM_CREATE: {} break;
 
 
 	case WM_SIZE: {
@@ -29,6 +30,7 @@ LRESULT CALLBACK TextEditorWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 	case WM_PAINT: {
 					   PAINTSTRUCT paintStruct;
 					   HDC deviceContext = BeginPaint(hWnd, &paintStruct);
+					   
 
 					   Rectangle(
 						   deviceContext,
@@ -47,24 +49,27 @@ LRESULT CALLBACK TextEditorWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 						   );
 
 					   SelectObject(deviceContext, GetStockObject(SYSTEM_FIXED_FONT));
+					   
 					   editorWindow->PrintText(deviceContext);
 
+					   EndPaint(hWnd,  &paintStruct);
 					   
-
-
-					   //
-					   //ShowCaret(hWnd);
-					   //
-					   EndPaint(hWnd, &paintStruct);
+					   editorWindow->ShowSelectedText(true);
 	} break;
 
 	case WM_LBUTTONDOWN: {
+
 							 int cursorXPos = LOWORD(lParam);
 							 int cursorYPos = HIWORD(lParam);
 
 							 if (editorWindow->textAreaEditRect_.left < cursorXPos && cursorXPos < editorWindow->textAreaEditRect_.right &&
 								 editorWindow->textAreaEditRect_.top < cursorYPos && cursorYPos < editorWindow->textAreaEditRect_.bottom)
 							 {
+								 /*
+								 disselect text;
+								 */
+								 editorWindow->ShowSelectedText(false);
+
 								 const int offset = 2;
 								 int yStep = editorWindow->textMetrics_.tmHeight + editorWindow->textMetrics_.tmExternalLeading;
 
@@ -90,19 +95,82 @@ LRESULT CALLBACK TextEditorWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 
 								 // x-caret text position;
 								 editorWindow->xCaretTextPosition_ = editorWindow->xCaretEditAreaPos_;
+
+
+
+								 // text selection;
+								 if (!editorWindow->isMouseTracked_)
+								 {
+									 /*editorWindow->deviceContext_ = BeginPaint(hWnd, &editorWindow->ps_);*/
+									 
+									 /*
+									 GetDC() here and manually fill PAINTSTRUCT;
+									 */
+									 if (editorWindow->deviceContext_ == nullptr)
+									 {
+										 editorWindow->deviceContext_ = GetDC(hWnd);
+									 }
+
+									 editorWindow->selTextReg_.logicUp_		=	editorWindow->yCaretTextPosition_;
+									 editorWindow->selTextReg_.logicLeft_	=	editorWindow->xCaretTextPosition_;
+									 editorWindow->selTextReg_.logicDown	= editorWindow->selTextReg_.logicUp_;
+									 editorWindow->selTextReg_.logicRight_	= editorWindow->selTextReg_.logicLeft_;
+
+
+									 editorWindow->isMouseTracked_ = true;
+								 }
+								 SendMessage(hWnd, WM_SETFOCUS, wParam, lParam);
 							 }
 
-							 SendMessage(hWnd, WM_SETFOCUS, wParam, lParam);
+	} break;
+
+	case WM_MOUSEMOVE: {
+						   if (editorWindow->isMouseTracked_)
+						   {
+							   HideCaret(hWnd); // think about it;
+							   SendMessage(hWnd, WM_LBUTTONDOWN, wParam, lParam);
+
+
+							   editorWindow->selTextReg_.logicDown = editorWindow->yCaretTextPosition_;
+							   editorWindow->selTextReg_.logicRight_ = editorWindow->xCaretTextPosition_;
+
+							   editorWindow->ShowSelectedText(true);
+
+
+							   //int yStep = editorWindow->textMetrics_.tmHeight + editorWindow->textMetrics_.tmExternalLeading;
+							   //
+							   //int logicTop = min(editorWindow->selTextReg_.logicUp_, editorWindow->selTextReg_.logicDown);
+							   //int logicBottom = max(editorWindow->selTextReg_.logicUp_, editorWindow->selTextReg_.logicDown);
+							   //
+							   //RECT rect;
+							   //rect.left = editorWindow->textAreaEditRect_.left;
+							   //rect.right = editorWindow->textAreaEditRect_.right;
+							   //rect.top = editorWindow->textAreaEditRect_.top + yStep * logicTop;
+							   //rect.bottom = editorWindow->textAreaEditRect_.top + yStep * logicBottom;
+							   //
+							   //InvalidateRect(hWnd, &rect, TRUE);
+							   
+							   ShowCaret(hWnd);
+						   }
+	} break;
+
+	case WM_LBUTTONUP: {
+						   editorWindow->isMouseTracked_ = false;
+
+						   //ReleaseDC(hWnd, editorWindow->deviceContext_);
 	} break;
 
 	case WM_SETFOCUS: {
 						  int yStep = editorWindow->textMetrics_.tmHeight + editorWindow->textMetrics_.tmExternalLeading;
 
 						  CreateCaret(hWnd, NULL, 1, yStep);
-						  SetCaretPos(
+						  
+						  /*SetCaretPos(
 							  editorWindow->textMetrics_.tmAveCharWidth * editorWindow->xCaretEditAreaPos_ + editorWindow->xStartWritePos_,
 							  yStep * editorWindow->yCaretEditAreaPos_ + editorWindow->yStartWritePos_
-							  );
+							  );*/
+
+						  editorWindow->UpdateCaretPosition();
 
 						  if (editorWindow->yCaretEditAreaPos_ >= 0 && 
 							  editorWindow->yCaretEditAreaPos_ < editorWindow->vertScrollInfo_.nPage)
@@ -179,8 +247,8 @@ LRESULT CALLBACK TextEditorWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 
 						 if (scrollIncrease != 0)
 						 {
-							 //editorWindow->UpdateCaretPosition();
 							 editorWindow->UpdateVertScroll(scrollIncrease);
+							 editorWindow->UpdateCaretPosition();
 						 
 						 	 if (editorWindow->yCaretEditAreaPos_ < 0 || editorWindow->yCaretEditAreaPos_ >= editorWindow->vertScrollInfo_.nPage)
 						 	 {
@@ -192,6 +260,7 @@ LRESULT CALLBACK TextEditorWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 						 		 editorWindow->isCaretVisible_ = true;
 						 		 ShowCaret(hWnd);
 						 	 }
+
 						 }
 	} break;
 
@@ -315,10 +384,24 @@ LRESULT CALLBACK TextEditorWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 
 						 int yStep = editorWindow->textMetrics_.tmHeight + editorWindow->textMetrics_.tmExternalLeading;
 
-						 SetCaretPos(
+						 if (editorWindow->deviceContext_ == nullptr)
+						 {
+							 editorWindow->deviceContext_ = GetDC(hWnd);
+						 }
+
+						 editorWindow->ShowSelectedText(false);
+
+						 editorWindow->selTextReg_.logicUp_ = editorWindow->yCaretTextPosition_;
+						 editorWindow->selTextReg_.logicLeft_ = editorWindow->xCaretTextPosition_;
+						 editorWindow->selTextReg_.logicDown = editorWindow->selTextReg_.logicUp_;
+						 editorWindow->selTextReg_.logicRight_ = editorWindow->selTextReg_.logicLeft_;
+
+						 /*SetCaretPos(
 							 editorWindow->xCaretEditAreaPos_ * editorWindow->textMetrics_.tmAveCharWidth + editorWindow->xStartWritePos_,
 							 editorWindow->yCaretEditAreaPos_ * yStep + editorWindow->yStartWritePos_
-							 );
+							 );*/
+
+						 editorWindow->UpdateCaretPosition();
 
 						 ShowCaret(hWnd);
 	} break;
@@ -354,7 +437,9 @@ LRESULT CALLBACK TextEditorWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 											 ++iter;
 										 }
 
+										 SendMessage(hWnd, WM_VSCROLL, SB_LINEUP, NULL);
 										 editorWindow->textLines_.erase(iter);
+
 
 										 editorWindow->UpdateScrollInfo();
 									 }
@@ -366,12 +451,14 @@ LRESULT CALLBACK TextEditorWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 										 --editorWindow->xCaretEditAreaPos_;
 									 }
 
-									 SetCaretPos(
+									 /*SetCaretPos(
 										 editorWindow->xCaretEditAreaPos_ * editorWindow->textMetrics_.tmAveCharWidth + editorWindow->xStartWritePos_,
 										 editorWindow->yCaretEditAreaPos_ * yStep + editorWindow->yStartWritePos_
-										 );
+										 );*/
 
-									 InvalidateRect(hWnd, &editorWindow->textAreaEditRect_, TRUE);
+									 //editorWindow->UpdateCaretPosition();
+									 //
+									 //InvalidateRect(hWnd, &editorWindow->textAreaEditRect_, TRUE);
 					  } break;
 
 					  case '\t': {
@@ -402,12 +489,14 @@ LRESULT CALLBACK TextEditorWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 									 ++editorWindow->yCaretEditAreaPos_;
 									 ++editorWindow->yCaretTextPosition_;
 
-									 SetCaretPos(
+									 /*SetCaretPos(
 										 editorWindow->xCaretEditAreaPos_ * editorWindow->textMetrics_.tmAveCharWidth + editorWindow->xStartWritePos_,
 										 editorWindow->yCaretEditAreaPos_ * yStep + editorWindow->yStartWritePos_
-										 );
+										 );*/
 
-									 InvalidateRect(hWnd, &editorWindow->textAreaEditRect_, TRUE);
+									 //editorWindow->UpdateCaretPosition();
+									 //
+									 //InvalidateRect(hWnd, &editorWindow->textAreaEditRect_, TRUE);
 					  } break;
 
 					  default: { // any other character;
@@ -417,14 +506,32 @@ LRESULT CALLBACK TextEditorWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 								   ++editorWindow->xCaretEditAreaPos_;
 								   ++editorWindow->xCaretTextPosition_;
 
-								   SetCaretPos(
+								   /*SetCaretPos(
 									   editorWindow->xCaretEditAreaPos_ * editorWindow->textMetrics_.tmAveCharWidth + editorWindow->xStartWritePos_,
 									   editorWindow->yCaretEditAreaPos_ * yStep + editorWindow->yStartWritePos_
-									   );
+									   );*/
 
-								   InvalidateRect(hWnd, &editorWindow->textAreaEditRect_, TRUE);
+								   //editorWindow->UpdateCaretPosition();
+								   //
+								   //InvalidateRect(hWnd, &editorWindow->textAreaEditRect_, TRUE);
 					  } break;
 					  }
+
+					  editorWindow->UpdateCaretPosition();
+
+					  if (editorWindow->deviceContext_ == nullptr)
+					  {
+						  editorWindow->deviceContext_ = GetDC(hWnd);
+					  }
+
+					  editorWindow->ShowSelectedText(false);
+
+					  editorWindow->selTextReg_.logicUp_ = editorWindow->yCaretTextPosition_;
+					  editorWindow->selTextReg_.logicLeft_ = editorWindow->xCaretTextPosition_;
+					  editorWindow->selTextReg_.logicDown = editorWindow->selTextReg_.logicUp_;
+					  editorWindow->selTextReg_.logicRight_ = editorWindow->selTextReg_.logicLeft_;
+
+					  InvalidateRect(hWnd, &editorWindow->textAreaEditRect_, TRUE);
 	} break;
 
 	case WM_CLOSE: {
@@ -432,6 +539,7 @@ LRESULT CALLBACK TextEditorWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 	} break;
 
 	case WM_DESTROY:{
+						ReleaseDC(hWnd, editorWindow->deviceContext_);
 						PostQuitMessage(0);
 	} break;
 

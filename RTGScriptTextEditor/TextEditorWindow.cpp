@@ -110,7 +110,7 @@ void TextEditorWindow::UpdateVertScroll(int scrollIncrease)
 
 	if (scrollIncrease) 
 	{
-		//this->yCaretEditAreaPos_ -= scrollIncrease;
+		this->yCaretEditAreaPos_ -= scrollIncrease;
 
 		int yStep = this->textMetrics_.tmHeight + this->textMetrics_.tmExternalLeading;
 
@@ -130,14 +130,20 @@ void TextEditorWindow::UpdateHorzScroll(int scrollIncrease)
 }
 
 
+
 void TextEditorWindow::UpdateCaretPosition()
 {
 	int yStep = this->textMetrics_.tmHeight + this->textMetrics_.tmExternalLeading;
 
 	SetCaretPos(
 		this->xCaretEditAreaPos_ * this->textMetrics_.tmAveCharWidth + this->xStartWritePos_,
-		this->xCaretEditAreaPos_ * yStep + this->yStartWritePos_
+		this->yCaretEditAreaPos_ * yStep + this->yStartWritePos_
 		);
+
+	/*SetCaretPos(
+		editorWindow->xCaretEditAreaPos_ * editorWindow->textMetrics_.tmAveCharWidth + editorWindow->xStartWritePos_,
+		editorWindow->yCaretEditAreaPos_ * yStep + editorWindow->yStartWritePos_
+		);*/
 
 	//if (this->isCaretVisible_)
 	//{
@@ -172,6 +178,133 @@ void TextEditorWindow::PrintText(HDC deviceContext)
 	}
 }
 
+
+//
+void TextEditorWindow::ShowSelectedText(const bool shouldBeColored)
+{
+	if (this->selTextReg_.logicUp_ == this->selTextReg_.logicDown &&
+		this->selTextReg_.logicLeft_ == this->selTextReg_.logicRight_)
+	{
+		return;
+	}
+
+	/*Adjusting*/
+	SelectedTextRegion finalRegion = this->selTextReg_;
+
+	if (finalRegion.logicDown < finalRegion.logicUp_)
+	{
+		swap(finalRegion.logicDown, finalRegion.logicUp_);
+		swap(finalRegion.logicRight_, finalRegion.logicLeft_);
+	}
+
+	if (finalRegion.logicUp_ == finalRegion.logicDown && finalRegion.logicLeft_ > finalRegion.logicRight_)
+	{
+		swap(finalRegion.logicLeft_, finalRegion.logicRight_);
+	}
+
+
+	COLORREF oldColor;
+	if (shouldBeColored)
+	{
+		SelectObject(this->deviceContext_, GetStockObject(SYSTEM_FIXED_FONT));
+		oldColor = SetBkColor(this->deviceContext_, RGB(102, 153, 204));
+	}
+
+
+	if (finalRegion.logicUp_ == finalRegion.logicDown) // if selected text belongs to single line
+	{
+		int xStartPos = this->textAreaEditRect_.left + this->textMetrics_.tmAveCharWidth * finalRegion.logicLeft_;
+		int numberOfChars = finalRegion.logicRight_ - finalRegion.logicLeft_;
+
+		int yStep = this->textMetrics_.tmHeight + this->textMetrics_.tmExternalLeading;
+
+		int textLineNumber = finalRegion.logicUp_;
+		int textAreaLineNumber = textLineNumber - this->vertScrollInfo_.nPos;
+
+		string strToShow = this->textLines_[textLineNumber].substr(finalRegion.logicLeft_, numberOfChars);
+
+		ExtTextOut(
+			this->deviceContext_,
+			xStartPos,
+			this->textAreaEditRect_.top + textAreaLineNumber * yStep,
+			ETO_CLIPPED,
+			&this->textAreaEditRect_,
+			strToShow.c_str(),
+			strToShow.length(),
+			NULL
+			);
+	}
+	else // this->selTextReg_.logicUp_ < (!) this->selTextReg_.logicDown
+	{
+		int yStep = this->textMetrics_.tmHeight + this->textMetrics_.tmExternalLeading;
+		
+		int xStartPos = this->textAreaEditRect_.left + this->textMetrics_.tmAveCharWidth * finalRegion.logicLeft_;
+		
+		int textLineNumber = finalRegion.logicUp_;
+		int textAreaLineNumber = textLineNumber - this->vertScrollInfo_.nPos;
+		
+		string firstLineStr = this->textLines_[textLineNumber].substr(finalRegion.logicLeft_, string::npos);
+		
+		ExtTextOut(
+			this->deviceContext_,
+			xStartPos,
+			this->textAreaEditRect_.top + textAreaLineNumber * yStep,
+			ETO_CLIPPED,
+			&this->textAreaEditRect_,
+			firstLineStr.c_str(),
+			firstLineStr.length(),
+			NULL
+			);
+		
+		++textLineNumber;
+		++finalRegion.logicUp_;
+		++textAreaLineNumber;
+		xStartPos = this->textAreaEditRect_.left;
+
+		while (finalRegion.logicUp_ < finalRegion.logicDown)
+		{
+			ExtTextOut(
+				this->deviceContext_,
+				xStartPos,
+				this->textAreaEditRect_.top + textAreaLineNumber * yStep,
+				ETO_CLIPPED,
+				&this->textAreaEditRect_,
+				this->textLines_[textLineNumber].c_str(),
+				this->textLines_[textLineNumber].length(),
+				NULL
+				);
+
+			++finalRegion.logicUp_;
+			++textLineNumber;
+			++textAreaLineNumber;
+		}
+
+		string lastLineStr = this->textLines_[textLineNumber].substr(0, finalRegion.logicRight_);
+		
+		ExtTextOut(
+			this->deviceContext_,
+			xStartPos,
+			this->textAreaEditRect_.top + textAreaLineNumber * yStep,
+			ETO_CLIPPED,
+			&this->textAreaEditRect_,
+			lastLineStr.c_str(),
+			lastLineStr.length(),
+			NULL
+			);
+
+	}
+
+
+
+	if (shouldBeColored)
+	{
+		SetBkMode(this->deviceContext_, OPAQUE);
+		SetBkColor(this->deviceContext_, oldColor);
+	}
+}
+//
+
+
 //void TextEditorWindow::AdjustWhenCaretInvisible()
 //{
 //	int diff = this->yCaretTextPosition_ - this->vertScrollInfo_.nPos;
@@ -197,7 +330,8 @@ TextEditorWindow::TextEditorWindow(
 	textMargin_(10),
 	myMenyHeight_(40),
 	scrollBoxWidth_(10),
-	isCaretVisible_(true)
+	isCaretVisible_(true),
+	deviceContext_(nullptr)
 {
 	char szClassName[] = "KWndClass";
 
@@ -262,6 +396,7 @@ TextEditorWindow::TextEditorWindow(
 	this->textLines_.push_back("1077 — Henry IV's Walk to Canossa");
 	this->textLines_.push_back("1086 — Domesday Book");
 	this->textLines_.push_back("1088 — University of Bologna founded");
+	
 
 	this->xStartWritePos_ = this->textAreaEditRect_.left;
 	this->yStartWritePos_ = this->textAreaEditRect_.top;
@@ -275,15 +410,6 @@ TextEditorWindow::TextEditorWindow(
 	this->yCaretTextPosition_ = 0;
 
 	/* creating scroll bar controls*/
-	
-	//int sbcX = this->textAreaBorderRect_.left;
-	//int sbcY = this->textAreaBorderRect_.top;
-	//int sbcWidth = this->textAreaBorderRect_.right - textAreaBorderRect_.left;
-	//int sbcHeight = this->textAreaBorderRect_.bottom - textAreaBorderRect_.top;
-
-	// standard scroll box size;
-	//int iHThumb = GetSystemMetrics(SM_CXHTHUMB);
-	//int iVThumb = GetSystemMetrics(SM_CYVTHUMB);
 
 	int hsbcX = this->textAreaBorderRect_.left;
 	int hsbcY = this->textAreaBorderRect_.bottom - this->scrollBoxWidth_;
@@ -330,7 +456,8 @@ TextEditorWindow::TextEditorWindow(
 
 	SetScrollInfo(this->vertSBC_, SB_CTL, &this->vertScrollInfo_, TRUE);
 	
-	//SetScrollRange(hWndVertScroll, SB_CTL, 0, MAX_RANGE, FALSE);
+	// text selection;
+	bool isMouseTracked_ = false;
 
 	ShowWindow(this->hWnd, cmdShow);
 }
@@ -342,6 +469,10 @@ HWND TextEditorWindow::GetHWnd()
 }
 
 
+TextEditorWindow::~TextEditorWindow()
+{
+	//EndPaint(hWnd, &this->ps_);
+}
 
 
 map<HWND, TextEditorWindow*> TextEditorWindow::hwndTextEditorWndMap;
