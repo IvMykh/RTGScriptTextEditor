@@ -13,7 +13,7 @@ void TextEditorWindow::RegisterWindowClass(char* className, UINT classStyle, LRE
 	this->wc.cbWndExtra = 0;
 	this->wc.hInstance = hInst;
 	this->wc.hIcon = LoadIcon(nullptr, IDI_APPLICATION);
-	this->wc.hCursor = LoadCursor(nullptr, IDC_IBEAM);
+	this->wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
 	this->wc.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);
 	this->wc.lpszMenuName = nullptr;
 	this->wc.lpszClassName = className;
@@ -303,6 +303,25 @@ void TextEditorWindow::ShowSelectedText(const bool shouldBeColored)
 	}
 }
 //
+
+bool TextEditorWindow::IsCaretInTextAreaBorderRect(const int cursorXPos, const int cursorYPos) const
+{
+	return this->textAreaBorderRect_.left < cursorXPos
+		&& cursorXPos < this->textAreaBorderRect_.right
+		&& this->textAreaBorderRect_.top < cursorYPos
+		&& cursorYPos < this->textAreaBorderRect_.bottom;
+}
+
+bool TextEditorWindow::IsCaretInTextAreaEditRect(const int cursorXPos, const int cursorYPos) const
+{
+	int yStep = this->textMetrics_.tmHeight + this->textMetrics_.tmExternalLeading; // cursor height;
+
+	return this->textAreaEditRect_.left <= cursorXPos
+		&& cursorXPos <= this->textAreaEditRect_.right
+		&& this->textAreaEditRect_.top <= cursorYPos
+		&& cursorYPos <= this->textAreaEditRect_.bottom - yStep;
+}
+
 
 
 //void TextEditorWindow::AdjustWhenCaretInvisible()

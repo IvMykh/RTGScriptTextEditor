@@ -8,7 +8,7 @@
 #include "SelectedLogicalRegion.h"
 
 // TODO: scrolling; ctrl+c; ctrl+v; ctrl+z;
-// ! consider tm->tmExternalLeading later; 
+// TODO: improve adjusting (probably using https://msdn.microsoft.com/ru-ru/library/windows/desktop/ms645530(v=vs.85).aspx)
 
 
 class TextEditorWindow
@@ -83,6 +83,9 @@ private: // methods;
 	//
 	void ShowSelectedText(const bool shouldBeColored);
 	//
+
+	bool IsCaretInTextAreaBorderRect(const int cursorXPos, const int cursorYPos) const;
+	bool IsCaretInTextAreaEditRect(const int cursorXPos, const int cursorYPos) const;
 
 
 	//void AdjustWhenCaretInvisible();
