@@ -69,6 +69,8 @@ void TextEditorWindow::SetTextMetrics()
 	ReleaseDC(hWnd, deviceContext);
 }
 
+
+
 void TextEditorWindow::UpdateScrollBarControlsPosition()
 {
 	// standard scroll box size;
@@ -139,16 +141,6 @@ void TextEditorWindow::UpdateCaretPosition()
 		this->xCaretEditAreaPos_ * this->textMetrics_.tmAveCharWidth + this->xStartWritePos_,
 		this->yCaretEditAreaPos_ * yStep + this->yStartWritePos_
 		);
-
-	/*SetCaretPos(
-		editorWindow->xCaretEditAreaPos_ * editorWindow->textMetrics_.tmAveCharWidth + editorWindow->xStartWritePos_,
-		editorWindow->yCaretEditAreaPos_ * yStep + editorWindow->yStartWritePos_
-		);*/
-
-	//if (this->isCaretVisible_)
-	//{
-	//	ShowCaret(hWnd);
-	//}
 }
 
 void TextEditorWindow::PrintText(HDC deviceContext)
@@ -179,17 +171,17 @@ void TextEditorWindow::PrintText(HDC deviceContext)
 }
 
 
-//
+
 void TextEditorWindow::ShowSelectedText(const bool shouldBeColored)
 {
-	if (this->selTextReg_.logicUp_ == this->selTextReg_.logicDown &&
-		this->selTextReg_.logicLeft_ == this->selTextReg_.logicRight_)
+	if (this->selTextReg_.IsRegionEmpty())
 	{
 		return;
 	}
 
-	/*Adjusting*/
-	SelectedTextRegion finalRegion = this->selTextReg_;
+	/*Adjusting bounds*/
+	
+	/*SelectedTextRegion finalRegion = this->selTextReg_;
 
 	if (finalRegion.logicDown < finalRegion.logicUp_)
 	{
@@ -200,7 +192,9 @@ void TextEditorWindow::ShowSelectedText(const bool shouldBeColored)
 	if (finalRegion.logicUp_ == finalRegion.logicDown && finalRegion.logicLeft_ > finalRegion.logicRight_)
 	{
 		swap(finalRegion.logicLeft_, finalRegion.logicRight_);
-	}
+	}*/
+
+	SelectedTextRegion finalRegion = this->selTextReg_.AdjustBounds();
 
 
 	COLORREF oldColor;
@@ -302,7 +296,8 @@ void TextEditorWindow::ShowSelectedText(const bool shouldBeColored)
 		SetBkColor(this->deviceContext_, oldColor);
 	}
 }
-//
+
+
 
 bool TextEditorWindow::IsCaretInTextAreaBorderRect(const int cursorXPos, const int cursorYPos) const
 {
@@ -324,11 +319,100 @@ bool TextEditorWindow::IsCaretInTextAreaEditRect(const int cursorXPos, const int
 
 
 
-//void TextEditorWindow::AdjustWhenCaretInvisible()
-//{
-//	int diff = this->yCaretTextPosition_ - this->vertScrollInfo_.nPos;
-//	this->UpdateVertScroll(diff);
-//}
+bool TextEditorWindow::CopySelectedTextToClipboard(const SelectedTextRegion& adjustedRegion) const
+{
+	/*creating string of text to be copied*/
+	string strToCopy = "";
+
+	if (adjustedRegion.logicUp_ == adjustedRegion.logicDown)
+	{
+		int startPos = adjustedRegion.logicLeft_;
+		int len = adjustedRegion.logicRight_ - adjustedRegion.logicLeft_;
+
+		strToCopy =
+			this->textLines_[adjustedRegion.logicUp_].substr(startPos, len);
+	}
+	else
+	{
+		int textlineNum = adjustedRegion.logicUp_;
+
+		strToCopy =
+			this->textLines_[textlineNum++].substr(adjustedRegion.logicLeft_, string::npos) + '\n';
+
+		while (textlineNum < adjustedRegion.logicDown)
+		{
+			strToCopy += (this->textLines_[textlineNum++] + '\n');
+		}
+
+		strToCopy += this->textLines_[textlineNum].substr(0, adjustedRegion.logicRight_);
+	}
+
+	/*selecting memory for storing selected text*/
+
+	HGLOBAL hGlobalMemory = GlobalAlloc(GHND, strToCopy.length() + 1);	if (!hGlobalMemory)
+	{
+		MessageBox(nullptr, "Cannot allocate memory for copying", "Error", MB_OK);
+		return false;
+	}
+	memcpy(GlobalLock(hGlobalMemory), strToCopy.c_str(), strToCopy.length() + 1);
+
+	GlobalUnlock(hGlobalMemory);
+
+
+	/*dealing with clipboard itself*/
+
+	if (!OpenClipboard(hWnd))
+	{
+		MessageBox(nullptr, "Cannot open clipboard for copying", "Error", MB_OK);
+		return false;
+	}
+
+	if (!EmptyClipboard())
+	{
+		MessageBox(nullptr, "Cannot empty clipboard for copying", "Error", MB_OK);
+		return false;
+	}
+
+	if (!SetClipboardData(CF_TEXT, hGlobalMemory))
+	{
+		MessageBox(nullptr, "Cannot set clipboard data while copying", "Error", MB_OK);
+		return false;
+	}
+
+	if (!CloseClipboard())
+	{
+		MessageBox(nullptr, "Cannot close clipboard while copying", "Error", MB_OK);
+		return false;
+	}
+
+	return true;
+}
+
+
+void TextEditorWindow::AdjustVertScrollingToCaretLine()
+{
+	int yStep = this->textMetrics_.tmHeight + this->textMetrics_.tmExternalLeading;
+
+	int xCursorPos = this->xCaretEditAreaPos_ * this->textMetrics_.tmAveCharWidth + this->xStartWritePos_;
+	int yCursorPos = this->yCaretEditAreaPos_ * yStep + this->yStartWritePos_;
+
+	if (!this->IsCaretInTextAreaEditRect(xCursorPos, yCursorPos))
+	{
+		int scrollIncrease = 0;
+
+		if (this->yCaretEditAreaPos_ < 0)
+		{
+			scrollIncrease = this->yCaretEditAreaPos_;
+		}
+		else
+		{
+			scrollIncrease = this->yCaretEditAreaPos_ - this->vertScrollInfo_.nPage + 1;
+		}
+
+		SendMessage(hWnd, WM_VSCROLL, MAKELONG(SB_THUMBTRACK, this->vertScrollInfo_.nPos + scrollIncrease), NULL);
+	}
+}
+
 
 
 TextEditorWindow::TextEditorWindow(
@@ -370,6 +454,10 @@ TextEditorWindow::TextEditorWindow(
 
 	// attaching window to concrete text editor instance;
 	hwndTextEditorWndMap[hWnd] = this;
+
+	/* new */
+	//this->RegisterHotKeys();
+	/**/
 
 	RECT clientRect;
 	GetClientRect(hWnd, &clientRect);

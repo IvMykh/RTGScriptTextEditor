@@ -6,9 +6,13 @@
 #include <vector>
 
 #include "SelectedLogicalRegion.h"
+#include "resource.h"
 
-// TODO: scrolling; ctrl+c; ctrl+v; ctrl+z;
-// TODO: improve adjusting (probably using https://msdn.microsoft.com/ru-ru/library/windows/desktop/ms645530(v=vs.85).aspx)
+
+
+
+// TODO: backspace with selected text handling;
+// TODO: ctrl+v; ctrl+z;
 
 
 class TextEditorWindow
@@ -19,7 +23,7 @@ private: // fileds;
 	HWND hWnd;
 	
 	// device context for selecting;
-	HDC deviceContext_; // ! is got in WM_CREATE handler and is released in WM_DESTROY;
+	HDC deviceContext_;
 
 
 	HWND vertSBC_;
@@ -80,15 +84,15 @@ private: // methods;
 	void UpdateCaretPosition();
 
 	void PrintText(HDC deviceContext);
-	//
+	
 	void ShowSelectedText(const bool shouldBeColored);
-	//
-
+	
 	bool IsCaretInTextAreaBorderRect(const int cursorXPos, const int cursorYPos) const;
 	bool IsCaretInTextAreaEditRect(const int cursorXPos, const int cursorYPos) const;
 
+	bool CopySelectedTextToClipboard(const SelectedTextRegion& adjustedRegion) const;
 
-	//void AdjustWhenCaretInvisible();
+	void AdjustVertScrollingToCaretLine();
 
 
 public: // methods;
@@ -103,7 +107,7 @@ public: // methods;
 		int width = CW_USEDEFAULT,
 		int height = 0,
 		UINT classStyle = CS_HREDRAW | CS_VREDRAW,
-		DWORD windowStyle = WS_OVERLAPPEDWINDOW /*| WS_HSCROLL | WS_VSCROLL*/,
+		DWORD windowStyle = WS_OVERLAPPEDWINDOW,
 		HWND hParent = nullptr 
 	);
 
