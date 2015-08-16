@@ -10,9 +10,13 @@
 
 
 
+// TODO: ctrl+z;
+// First thing TO DO: place caret in the end of pasted text range;
 
-// TODO: backspace with selected text handling;
-// TODO: ctrl+v; ctrl+z;
+
+bool SplitString(const std::string& sourceStr, const char delim, std::vector<std::string>& destVector);
+void ConvertTabsIntoSpaces(std::vector<std::string>& lines);
+
 
 
 class TextEditorWindow
@@ -91,6 +95,7 @@ private: // methods;
 	bool IsCaretInTextAreaEditRect(const int cursorXPos, const int cursorYPos) const;
 
 	bool CopySelectedTextToClipboard(const SelectedTextRegion& adjustedRegion) const;
+	void RemoveSelectedTextRegion(const SelectedTextRegion& adjustedRegion);
 
 	void AdjustVertScrollingToCaretLine();
 

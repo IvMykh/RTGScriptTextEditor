@@ -1,10 +1,11 @@
 #include "TextEditorWindow.h"
 
+#include <algorithm>
 #include <zmouse.h>
 
 using namespace std;
 
-// TODO: selecting text;
+
 
 // window procedure definition;
 LRESULT CALLBACK TextEditorWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -302,10 +303,19 @@ LRESULT CALLBACK TextEditorWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 											  /* move caret to the end of text and adjust scrolling */
 											  
 											  editorWindow->xCaretEditAreaPos_ = editorWindow->textLines_[editorWindow->textLines_.size() - 1].length();
-											  editorWindow->yCaretEditAreaPos_ = editorWindow->textLines_.size() - 1;
+											  editorWindow->yCaretEditAreaPos_ = editorWindow->textLines_.size() - 1 - editorWindow->vertScrollInfo_.nPos;
+																									/* ! pay attention to "- editorWindow->vertScrollInfo_.nPos" */
+
+
+											  editorWindow->xCaretTextPosition_ = editorWindow->textLines_[editorWindow->textLines_.size() - 1].length();
+											  editorWindow->yCaretTextPosition_ = editorWindow->textLines_.size() - 1;
 
 											  editorWindow->AdjustVertScrollingToCaretLine();
 											  editorWindow->UpdateCaretPosition();
+
+											  /* at this point caret is surely visible */
+											  editorWindow->isCaretVisible_ = true;
+											  ShowCaret(hWnd);
 
 											  editorWindow->selTextReg_.logicUp_ = 0;
 											  editorWindow->selTextReg_.logicLeft_ = 0;
@@ -329,7 +339,113 @@ LRESULT CALLBACK TextEditorWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 						 } break;
 
 						 case  ID_CTRL_V: {
-											  MessageBox(nullptr, "CTRL + V is not supported yet", "!", MB_OK);
+											  /* opening clipboard for getting text */
+											  if (!OpenClipboard(hWnd))
+											  {
+												  MessageBox(nullptr, "Cannot open clipboard for pasting", "Error", MB_OK);
+												  break;
+											  }
+
+
+											  /*figuring out if there is available text for getting*/
+											  HANDLE hClipMemory = GetClipboardData(CF_TEXT);
+
+											  if (hClipMemory == nullptr)
+											  {
+												  if (!CloseClipboard())
+													  MessageBox(nullptr, "Cannot close clipboard", "Error", MB_OK);
+
+												  break;
+											  }
+
+
+											  /*saving data to string*/
+											  char* cstrData = (char*)GlobalLock(hClipMemory);
+											  string myText(cstrData);
+											  
+											  GlobalUnlock(hClipMemory);
+
+											  if (!CloseClipboard())
+											  {
+												  MessageBox(nullptr, "Cannot close clipboard while pasting", "Error", MB_OK);
+												  break;
+											  }
+
+
+											  /*dealing with string of text itself*/
+											  
+											  // splitting & dealing with tabs;
+											  vector<string> textLines;
+											  const char delim = '\n';
+											  
+											  bool endsWithDelim = SplitString(myText, delim, textLines);
+											  ConvertTabsIntoSpaces(textLines);
+
+
+											  if (textLines.size() == 1)
+											  {
+												  if (endsWithDelim)
+												  {
+													  string lastLineEnding = editorWindow->textLines_[editorWindow->yCaretTextPosition_]
+														  .substr(editorWindow->xCaretTextPosition_, string::npos);
+
+													  editorWindow->textLines_[editorWindow->yCaretTextPosition_]
+														  .erase(editorWindow->xCaretTextPosition_, string::npos);
+
+
+
+													  editorWindow->textLines_[editorWindow->yCaretTextPosition_] += textLines.front();
+
+													  editorWindow->textLines_
+														  .insert(
+														  editorWindow->textLines_.begin() + editorWindow->yCaretTextPosition_ + 1,
+														  lastLineEnding
+														  );
+												  }
+												  else
+												  {
+													  editorWindow->textLines_[editorWindow->yCaretTextPosition_]
+														  .insert(editorWindow->xCaretTextPosition_, textLines.front());
+												  }
+											  }
+											  else		// if (textLines.size() > 1)
+											  {
+												  string lastLineEnding = editorWindow->textLines_[editorWindow->yCaretTextPosition_]
+													  .substr(editorWindow->xCaretTextPosition_, string::npos);
+
+												  editorWindow->textLines_[editorWindow->yCaretTextPosition_]
+													  .erase(editorWindow->xCaretTextPosition_, string::npos);
+
+
+
+												  editorWindow->textLines_[editorWindow->yCaretTextPosition_] += textLines.front();
+
+
+												  auto begIter = textLines.begin() + 1;
+												  auto endIter = textLines.end();
+
+												  int offset = editorWindow->yCaretTextPosition_;
+
+												  while (begIter != endIter)
+												  {
+													  editorWindow->textLines_.insert(editorWindow->textLines_.begin() + ++offset, *begIter++);
+												  }
+
+
+												  if (endsWithDelim)
+												  {
+													  editorWindow->textLines_.insert(editorWindow->textLines_.begin() + ++offset, lastLineEnding);
+												  }
+												  else
+												  {
+													  editorWindow->textLines_[offset] += lastLineEnding;
+												  }
+											  }
+
+											  editorWindow->UpdateScrollInfo();
+											  editorWindow->AdjustVertScrollingToCaretLine();
+
+											  InvalidateRect(hWnd, &editorWindow->textAreaEditRect_, TRUE);
 						 } break;
 
 						 case  ID_CTRL_X: {
@@ -344,64 +460,7 @@ LRESULT CALLBACK TextEditorWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 												  break;
 											  }
 
-
-
-											  editorWindow->xCaretTextPosition_ = adjustedRegion.logicLeft_;
-											  editorWindow->yCaretTextPosition_ = adjustedRegion.logicUp_;
-
-											  editorWindow->xCaretEditAreaPos_ = adjustedRegion.logicLeft_;
-
-											  int diff = adjustedRegion.logicDown - adjustedRegion.logicUp_;
-
-											  editorWindow->yCaretEditAreaPos_ -= 
-												  (editorWindow->selTextReg_.logicUp_ < editorWindow->selTextReg_.logicDown) ? diff : 0;
-
-											  editorWindow->selTextReg_
-												  .SetRegionEmpty(editorWindow->xCaretTextPosition_, editorWindow->yCaretTextPosition_);
-
-											  if (adjustedRegion.logicUp_ == adjustedRegion.logicDown)
-											  {
-												  int startPos = adjustedRegion.logicLeft_;
-												  int len = adjustedRegion.logicRight_ - adjustedRegion.logicLeft_;
-
-												  editorWindow->textLines_[adjustedRegion.logicUp_].erase(startPos, len);
-											  }
-											  else
-											  {
-												  int startPos = adjustedRegion.logicRight_;
-
-												  string endOfLastLine =
-													  editorWindow->textLines_[adjustedRegion.logicDown].substr(startPos, string::npos);
-
-												  int len = adjustedRegion.logicLeft_;
-
-												  editorWindow->textLines_[adjustedRegion.logicUp_] =
-													  editorWindow->textLines_[adjustedRegion.logicUp_].substr(0, len) + endOfLastLine;
-
-												  auto begIter = editorWindow->textLines_.begin();
-												  auto endIter = editorWindow->textLines_.begin();
-												  int i = 0;
-
-												  while (i++ <= adjustedRegion.logicUp_)
-												  {
-													  ++begIter;
-													  ++endIter;
-												  }
-
-												  while (i++ <= adjustedRegion.logicDown)
-												  {
-													  ++endIter;
-												  }
-
-												  editorWindow->textLines_.erase(begIter, ++endIter);
-
-												  editorWindow->UpdateScrollInfo();
-											  }
-
-											  editorWindow->AdjustVertScrollingToCaretLine();
-											  editorWindow->UpdateCaretPosition();
-
-											  InvalidateRect(hWnd, &editorWindow->textAreaEditRect_, TRUE);
+											  editorWindow->RemoveSelectedTextRegion(adjustedRegion);
 
 						 } break;
 
@@ -414,48 +473,32 @@ LRESULT CALLBACK TextEditorWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 						 if (wParam == VK_CONTROL || wParam == VK_SHIFT)
 							 break;
 
+						 
+						 if (editorWindow->deviceContext_ == nullptr)
+						 {
+							 editorWindow->deviceContext_ = GetDC(hWnd);
+						 }
 
-
-						 //int currXEditAreaPos = editorWindow->xCaretEditAreaPos_;
-						 //int currYEditAreaPos = editorWindow->yCaretEditAreaPos_;
-
-						 int currYTextPos = editorWindow->yCaretTextPosition_;
-						 int currXTextPos = editorWindow->xCaretTextPosition_;
 
 						 /*
 						 Adjusting when caret out of edit rect;
+						 (BE CAREFUL WHILE HORZ SCROLLING ADJUSTING)
 						 */
-
-						 /*BE CAREFUL WHILE HORZ SCROLLING ADJUSTING*/
-
-						 /*int yStep = editorWindow->textMetrics_.tmHeight + editorWindow->textMetrics_.tmExternalLeading;
-						 
-						 int xCursorPos = currXEditAreaPos * editorWindow->textMetrics_.tmAveCharWidth + editorWindow->xStartWritePos_;
-						 int yCursorPos = currYEditAreaPos * yStep + editorWindow->yStartWritePos_;
-						 
-						 if (!editorWindow->IsCaretInTextAreaEditRect(xCursorPos, yCursorPos))
-						 {
-							 int scrollIncrease = 0;
-							 
-							 if (currYEditAreaPos < 0)
-							 {
-								 scrollIncrease = currYEditAreaPos;
-							 }
-							 else
-							 {
-								 scrollIncrease = currYEditAreaPos - editorWindow->vertScrollInfo_.nPage + 1;
-							 }
-							 
-							 SendMessage(hWnd, WM_VSCROLL, MAKELONG(SB_THUMBTRACK, editorWindow->vertScrollInfo_.nPos + scrollIncrease), NULL);
-						 }*/
 
 						 editorWindow->AdjustVertScrollingToCaretLine();
 
 						 /*
 						 */
 
-						 int currXEditAreaPos = editorWindow->xCaretEditAreaPos_; // be careful while modifying actual values;
-						 int currYEditAreaPos = editorWindow->yCaretEditAreaPos_; // be careful while modifying actual values;
+
+						 /*be careful while modifying actual values*/
+
+						 int currYTextPos = editorWindow->yCaretTextPosition_;
+						 int currXTextPos = editorWindow->xCaretTextPosition_;
+
+						 int currXEditAreaPos = editorWindow->xCaretEditAreaPos_;
+						 int currYEditAreaPos = editorWindow->yCaretEditAreaPos_;
+
 
 
 						 switch (wParam)
@@ -464,11 +507,19 @@ LRESULT CALLBACK TextEditorWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 										   if (currXTextPos == 0 && currYTextPos == 0)
 											   break;
 
-										   /* new */
+										   
 										   if (currXTextPos == 0 && currYTextPos != 0 && currYEditAreaPos == 0)
 										   {
 											   SendMessage(hWnd, WM_VSCROLL, SB_LINEUP, NULL);
 										   }
+
+										   /*new*/
+										   editorWindow->ShowSelectedText(false);
+
+										   editorWindow->selTextReg_.SetRegionEmpty(
+											   editorWindow->xCaretTextPosition_,
+											   editorWindow->yCaretTextPosition_
+											   );
 										   /**/
 
 										   if (currXTextPos == 0)
@@ -478,11 +529,13 @@ LRESULT CALLBACK TextEditorWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 
 											   editorWindow->xCaretEditAreaPos_ = editorWindow->xCaretTextPosition_;
 											   --editorWindow->yCaretEditAreaPos_;
+
 											   break;
 										   }
 
 										   --editorWindow->xCaretTextPosition_;
 										   --editorWindow->xCaretEditAreaPos_;
+
 						 } break;
 
 						 case VK_RIGHT: {
@@ -498,6 +551,15 @@ LRESULT CALLBACK TextEditorWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 												SendMessage(hWnd, WM_VSCROLL, SB_LINEDOWN, NULL);
 											}
 
+											/*new*/
+											editorWindow->ShowSelectedText(false);
+
+											editorWindow->selTextReg_.SetRegionEmpty(
+												editorWindow->xCaretTextPosition_,
+												editorWindow->yCaretTextPosition_
+												);
+											/**/
+
 											if (currXTextPos == editorWindow->textLines_[currYTextPos].length())
 											{
 												editorWindow->xCaretEditAreaPos_ = 0;
@@ -505,11 +567,30 @@ LRESULT CALLBACK TextEditorWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 
 												++editorWindow->yCaretEditAreaPos_;
 												++editorWindow->yCaretTextPosition_;
+
+												/*new*/
+												/*editorWindow->ShowSelectedText(false);
+
+												editorWindow->selTextReg_.SetRegionEmpty(
+													editorWindow->xCaretTextPosition_,
+													editorWindow->yCaretTextPosition_
+													);*/
+												/**/
+
 												break;
 											}
 
 											++editorWindow->xCaretEditAreaPos_;
 											++editorWindow->xCaretTextPosition_;
+
+											/*new*/
+											/*editorWindow->ShowSelectedText(false);
+											
+											editorWindow->selTextReg_.SetRegionEmpty(
+												editorWindow->xCaretTextPosition_,
+												editorWindow->yCaretTextPosition_
+												);*/
+											/**/
 						 } break;
 
 						 case VK_UP: {
@@ -518,12 +599,21 @@ LRESULT CALLBACK TextEditorWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 											 break;
 										 }
 
-										 /* new */
+
 										 if (currYEditAreaPos == 0)
 										 {
 											 SendMessage(hWnd, WM_VSCROLL, SB_LINEUP, NULL);
 										 }
+
+										 /*new*/
+										 editorWindow->ShowSelectedText(false);
+
+										 editorWindow->selTextReg_.SetRegionEmpty(
+											 editorWindow->xCaretTextPosition_,
+											 editorWindow->yCaretTextPosition_
+											 );
 										 /**/
+
 
 										 if (currXTextPos > editorWindow->textLines_[currYTextPos - 1].length())
 										 {
@@ -546,12 +636,22 @@ LRESULT CALLBACK TextEditorWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 											   break;
 										   }
 
-										   /* new */
+
 										   if (currYEditAreaPos == editorWindow->vertScrollInfo_.nPage - 1)
 										   {
 											   SendMessage(hWnd, WM_VSCROLL, SB_LINEDOWN, NULL);
 										   }
+
+
+										   /*new*/
+										   editorWindow->ShowSelectedText(false);
+
+										   editorWindow->selTextReg_.SetRegionEmpty(
+											   editorWindow->xCaretTextPosition_,
+											   editorWindow->yCaretTextPosition_
+											   );
 										   /**/
+
 
 										   if (currXTextPos > editorWindow->textLines_[currYTextPos + 1].length())
 										   {
@@ -569,30 +669,40 @@ LRESULT CALLBACK TextEditorWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 						 } break;
 
 						 case VK_DELETE: {
-											 if (currYTextPos == editorWindow->textLines_.size() - 1 &&
-												 currXTextPos == editorWindow->textLines_[currYTextPos].length())
+											 if (editorWindow->selTextReg_.IsRegionEmpty())
 											 {
-												 break;
-											 }
-
-											 if (currXTextPos == editorWindow->textLines_[currYTextPos].length())
-											 {
-												 editorWindow->textLines_[currYTextPos] += editorWindow->textLines_[currYTextPos + 1];
-
-												 auto iter = editorWindow->textLines_.begin();
-												 for (int i = 0; i < currYTextPos + 1; ++i)
+												 if (currYTextPos == editorWindow->textLines_.size() - 1 &&
+													 currXTextPos == editorWindow->textLines_[currYTextPos].length())
 												 {
-													 ++iter;
+													 break;
 												 }
 
-												 editorWindow->textLines_.erase(iter);
+												 if (currXTextPos == editorWindow->textLines_[currYTextPos].length())
+												 {
+													 editorWindow->textLines_[currYTextPos] += editorWindow->textLines_[currYTextPos + 1];
+
+													 auto iter = editorWindow->textLines_.begin();
+													 for (int i = 0; i < currYTextPos + 1; ++i)
+													 {
+														 ++iter;
+													 }
+
+													 editorWindow->textLines_.erase(iter);
+
+													 editorWindow->UpdateScrollInfo();
+												 }
+												 else
+												 {
+													 editorWindow->textLines_[currYTextPos].erase(currXTextPos, 1);
+												 }
+
+												 InvalidateRect(hWnd, &editorWindow->textAreaEditRect_, TRUE);
 											 }
 											 else
 											 {
-												 editorWindow->textLines_[currYTextPos].erase(currXTextPos, 1);
+												 SelectedTextRegion adjustedRegion = editorWindow->selTextReg_.AdjustBounds();
+												 editorWindow->RemoveSelectedTextRegion(adjustedRegion);
 											 }
-
-											 InvalidateRect(hWnd, &editorWindow->textAreaEditRect_, TRUE);
 						 } break;
 
 						 case VK_ESCAPE: {
@@ -600,26 +710,22 @@ LRESULT CALLBACK TextEditorWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 						 } break;
 						 }
 
-
-						 if (editorWindow->deviceContext_ == nullptr)
-						 {
-							 editorWindow->deviceContext_ = GetDC(hWnd);
-						 }
-
-						 editorWindow->ShowSelectedText(false);
-						
-						 editorWindow->selTextReg_.logicUp_ = editorWindow->yCaretTextPosition_;
-						 editorWindow->selTextReg_.logicLeft_ = editorWindow->xCaretTextPosition_;
-						 editorWindow->selTextReg_.logicDown = editorWindow->selTextReg_.logicUp_;
-						 editorWindow->selTextReg_.logicRight_ = editorWindow->selTextReg_.logicLeft_;
-						 
-
 						 editorWindow->UpdateCaretPosition();
-
 						 ShowCaret(hWnd);
 	} break;
 	
-	case WM_CHAR: {
+	case WM_CHAR: {  
+					  bool isSelRegRemoved = false;
+
+					  if (!editorWindow->selTextReg_.IsRegionEmpty())
+					  {
+						  SelectedTextRegion adjustedRegion = editorWindow->selTextReg_.AdjustBounds();
+						  editorWindow->RemoveSelectedTextRegion(adjustedRegion);
+
+						  isSelRegRemoved = true;
+					  }
+
+
 					  int currXEditAreaPos = editorWindow->xCaretEditAreaPos_;
 					  int currYEditAreaPos = editorWindow->yCaretEditAreaPos_;
 
@@ -628,41 +734,48 @@ LRESULT CALLBACK TextEditorWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 
 					  int yStep = editorWindow->textMetrics_.tmHeight + editorWindow->textMetrics_.tmExternalLeading;
 
+
+
 					  switch (wParam)
 					  {
 					  case '\b': { // backspace;
-									 if (currXTextPos == 0 && currYTextPos == 0)
-										 break;
 
-									 if (currXTextPos == 0)
-									 {
-										 --editorWindow->yCaretTextPosition_;
-										 --editorWindow->yCaretEditAreaPos_;
+									 if (!isSelRegRemoved)
+									 {	/* delete single char */
+										 if (currXTextPos == 0 && currYTextPos == 0)
+											 break;
 
-										 editorWindow->xCaretEditAreaPos_ = editorWindow->textLines_[currYTextPos - 1].length();
-										 editorWindow->xCaretTextPosition_ = editorWindow->textLines_[currYTextPos - 1].length();
-
-										 editorWindow->textLines_[currYTextPos - 1] += editorWindow->textLines_[currYTextPos];
-
-										 auto iter = editorWindow->textLines_.begin();
-										 for (int i = 0; i < currYTextPos; ++i)
+										 if (currXTextPos == 0)
 										 {
-											 ++iter;
+											 --editorWindow->yCaretTextPosition_;
+											 --editorWindow->yCaretEditAreaPos_;
+
+											 editorWindow->xCaretEditAreaPos_ = editorWindow->textLines_[currYTextPos - 1].length();
+											 editorWindow->xCaretTextPosition_ = editorWindow->textLines_[currYTextPos - 1].length();
+
+											 editorWindow->textLines_[currYTextPos - 1] += editorWindow->textLines_[currYTextPos];
+
+											 auto iter = editorWindow->textLines_.begin();
+											 for (int i = 0; i < currYTextPos; ++i)
+											 {
+												 ++iter;
+											 }
+
+											 SendMessage(hWnd, WM_VSCROLL, SB_LINEUP, NULL);
+											 editorWindow->textLines_.erase(iter);
+
+
+											 editorWindow->UpdateScrollInfo();
 										 }
+										 else
+										 {	
+											 editorWindow->textLines_[currYTextPos].erase(currXTextPos - 1, 1);
 
-										 SendMessage(hWnd, WM_VSCROLL, SB_LINEUP, NULL);
-										 editorWindow->textLines_.erase(iter);
-
-
-										 editorWindow->UpdateScrollInfo();
+											 --editorWindow->xCaretTextPosition_;
+											 --editorWindow->xCaretEditAreaPos_;
+										 }
 									 }
-									 else
-									 {
-										 editorWindow->textLines_[currYTextPos].erase(currXTextPos - 1, 1);
-
-										 --editorWindow->xCaretTextPosition_;
-										 --editorWindow->xCaretEditAreaPos_;
-									 }
+									 // oposite case already handled;
 					  } break;
 
 					  case '\t': {
@@ -712,22 +825,9 @@ LRESULT CALLBACK TextEditorWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 					  }
 
 					  editorWindow->UpdateCaretPosition();
-
-					  if (editorWindow->deviceContext_ == nullptr)
-					  {
-						  editorWindow->deviceContext_ = GetDC(hWnd);
-					  }
-
-					  editorWindow->ShowSelectedText(false);
-
-					  editorWindow->selTextReg_.logicUp_ = editorWindow->yCaretTextPosition_;
-					  editorWindow->selTextReg_.logicLeft_ = editorWindow->xCaretTextPosition_;
-					  editorWindow->selTextReg_.logicDown = editorWindow->selTextReg_.logicUp_;
-					  editorWindow->selTextReg_.logicRight_ = editorWindow->selTextReg_.logicLeft_;
+					  ShowCaret(hWnd);
 
 					  InvalidateRect(hWnd, &editorWindow->textAreaEditRect_, TRUE);
-
-
 	} break;
 
 	case WM_CLOSE: {

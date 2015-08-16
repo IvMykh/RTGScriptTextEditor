@@ -1,6 +1,63 @@
 #include "TextEditorWindow.h"
 
+#include <algorithm>
+
 using namespace std;
+
+
+
+bool SplitString(const std::string& sourceStr, const char delim, std::vector<std::string>& destVector)
+{
+	bool endsWithDelim = true;
+
+	int i = 0;
+	int startPos = 0;
+
+	while ((i = sourceStr.find(delim, startPos)) != string::npos)
+	{
+		destVector.push_back(sourceStr.substr(startPos, i - startPos));
+		startPos = i + 1;
+	}
+
+	if (startPos < sourceStr.length())
+	{
+		destVector.push_back(sourceStr.substr(startPos, string::npos));
+		endsWithDelim = false;
+	}
+
+
+	if (sourceStr.empty())
+	{
+		return false;
+	}
+	else
+	{
+		return endsWithDelim;
+	}
+}
+
+
+
+void ConvertTabsIntoSpaces(std::vector<std::string>& lines)
+{
+	const char tab = '\t';
+	const char space = ' ';
+
+	for_each(lines.begin(), lines.end(),
+		[tab, space](string& line)
+	{
+		int i = 0;
+		while ((i = line.find(tab, i)) != string::npos)
+		{
+			line.erase(i, 1);
+			do
+			{
+				line.insert(i++, 1, space);
+			} while (i % 8 != 0);
+		}
+	});
+}
+
 
 
 
@@ -180,20 +237,6 @@ void TextEditorWindow::ShowSelectedText(const bool shouldBeColored)
 	}
 
 	/*Adjusting bounds*/
-	
-	/*SelectedTextRegion finalRegion = this->selTextReg_;
-
-	if (finalRegion.logicDown < finalRegion.logicUp_)
-	{
-		swap(finalRegion.logicDown, finalRegion.logicUp_);
-		swap(finalRegion.logicRight_, finalRegion.logicLeft_);
-	}
-
-	if (finalRegion.logicUp_ == finalRegion.logicDown && finalRegion.logicLeft_ > finalRegion.logicRight_)
-	{
-		swap(finalRegion.logicLeft_, finalRegion.logicRight_);
-	}*/
-
 	SelectedTextRegion finalRegion = this->selTextReg_.AdjustBounds();
 
 
@@ -204,6 +247,11 @@ void TextEditorWindow::ShowSelectedText(const bool shouldBeColored)
 		oldColor = SetBkColor(this->deviceContext_, RGB(102, 153, 204));
 	}
 
+	// hiding caret to remove invalid tracks ...;
+	if (this->isCaretVisible_)
+	{
+		HideCaret(this->hWnd);
+	}
 
 	if (finalRegion.logicUp_ == finalRegion.logicDown) // if selected text belongs to single line
 	{
@@ -295,6 +343,12 @@ void TextEditorWindow::ShowSelectedText(const bool shouldBeColored)
 		SetBkMode(this->deviceContext_, OPAQUE);
 		SetBkColor(this->deviceContext_, oldColor);
 	}
+
+	// ... and showing it again;
+	if (this->isCaretVisible_)
+	{
+		ShowCaret(this->hWnd);
+	}
 }
 
 
@@ -347,8 +401,7 @@ bool TextEditorWindow::CopySelectedTextToClipboard(const SelectedTextRegion& adj
 		strToCopy += this->textLines_[textlineNum].substr(0, adjustedRegion.logicRight_);
 	}
 
-	/*selecting memory for storing selected text*/
-
+	/*allocating memory for storing selected text*/
 	HGLOBAL hGlobalMemory = GlobalAlloc(GHND, strToCopy.length() + 1);	if (!hGlobalMemory)
 	{
 		MessageBox(nullptr, "Cannot allocate memory for copying", "Error", MB_OK);
@@ -360,7 +413,6 @@ bool TextEditorWindow::CopySelectedTextToClipboard(const SelectedTextRegion& adj
 
 
 	/*dealing with clipboard itself*/
-
 	if (!OpenClipboard(hWnd))
 	{
 		MessageBox(nullptr, "Cannot open clipboard for copying", "Error", MB_OK);
@@ -388,6 +440,65 @@ bool TextEditorWindow::CopySelectedTextToClipboard(const SelectedTextRegion& adj
 	return true;
 }
 
+void TextEditorWindow::RemoveSelectedTextRegion(const SelectedTextRegion& adjustedRegion)
+{
+	this->xCaretTextPosition_ = adjustedRegion.logicLeft_;
+	this->yCaretTextPosition_ = adjustedRegion.logicUp_;
+
+	this->xCaretEditAreaPos_ = adjustedRegion.logicLeft_;
+
+	int diff = adjustedRegion.logicDown - adjustedRegion.logicUp_;
+
+	this->yCaretEditAreaPos_ -=
+		(this->selTextReg_.logicUp_ < this->selTextReg_.logicDown) ? diff : 0;
+
+	this->selTextReg_
+		.SetRegionEmpty(this->xCaretTextPosition_, this->yCaretTextPosition_);
+
+	if (adjustedRegion.logicUp_ == adjustedRegion.logicDown)
+	{
+		int startPos = adjustedRegion.logicLeft_;
+		int len = adjustedRegion.logicRight_ - adjustedRegion.logicLeft_;
+
+		this->textLines_[adjustedRegion.logicUp_].erase(startPos, len);
+	}
+	else
+	{
+		int startPos = adjustedRegion.logicRight_;
+
+		string endOfLastLine =
+			this->textLines_[adjustedRegion.logicDown].substr(startPos, string::npos);
+
+		int len = adjustedRegion.logicLeft_;
+
+		this->textLines_[adjustedRegion.logicUp_] =
+			this->textLines_[adjustedRegion.logicUp_].substr(0, len) + endOfLastLine;
+
+		auto begIter = this->textLines_.begin();
+		auto endIter = this->textLines_.begin();
+		int i = 0;
+
+		while (i++ <= adjustedRegion.logicUp_)
+		{
+			++begIter;
+			++endIter;
+		}
+
+		while (i++ <= adjustedRegion.logicDown)
+		{
+			++endIter;
+		}
+
+		this->textLines_.erase(begIter, ++endIter);
+
+		this->UpdateScrollInfo();
+	}
+
+	this->AdjustVertScrollingToCaretLine();
+	this->UpdateCaretPosition();
+
+	InvalidateRect(hWnd, &this->textAreaEditRect_, TRUE);
+}
 
 void TextEditorWindow::AdjustVertScrollingToCaretLine()
 {
