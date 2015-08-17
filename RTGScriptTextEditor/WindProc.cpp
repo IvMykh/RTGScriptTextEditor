@@ -401,11 +401,25 @@ LRESULT CALLBACK TextEditorWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 														  editorWindow->textLines_.begin() + editorWindow->yCaretTextPosition_ + 1,
 														  lastLineEnding
 														  );
+
+													  /*caret*/
+													  ++editorWindow->yCaretTextPosition_;
+													  ++editorWindow->yCaretEditAreaPos_;
+
+													  editorWindow->xCaretTextPosition_ = 0;//lastLineEnding.length();
+													  editorWindow->xCaretEditAreaPos_	= 0;//lastLineEnding.length();
+													  /**/
 												  }
 												  else
 												  {
+
 													  editorWindow->textLines_[editorWindow->yCaretTextPosition_]
 														  .insert(editorWindow->xCaretTextPosition_, textLines.front());
+
+													  /*caret*/
+													  editorWindow->xCaretTextPosition_	+= textLines.front().length();
+													  editorWindow->xCaretEditAreaPos_	+= textLines.front().length();
+													  /**/
 												  }
 											  }
 											  else		// if (textLines.size() > 1)
@@ -435,15 +449,36 @@ LRESULT CALLBACK TextEditorWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 												  if (endsWithDelim)
 												  {
 													  editorWindow->textLines_.insert(editorWindow->textLines_.begin() + ++offset, lastLineEnding);
+
+													  /*caret*/
+													  int linesInserted = textLines.size();
+
+													  editorWindow->yCaretTextPosition_ += linesInserted;
+													  editorWindow->yCaretEditAreaPos_ += linesInserted;
+
+													  editorWindow->xCaretTextPosition_ = 0; //lastLineEnding.length();
+													  editorWindow->xCaretEditAreaPos_ = 0;	//lastLineEnding.length();
+													  /**/
 												  }
 												  else
 												  {
+													  /*caret*/
+													  int linesInserted = textLines.size() - 1;
+
+													  editorWindow->yCaretTextPosition_ += linesInserted;
+													  editorWindow->yCaretEditAreaPos_ += linesInserted;
+
+													  editorWindow->xCaretTextPosition_ = editorWindow->textLines_[offset].length();
+													  editorWindow->xCaretEditAreaPos_ = editorWindow->textLines_[offset].length();
+													  /**/
+
 													  editorWindow->textLines_[offset] += lastLineEnding;
 												  }
 											  }
 
 											  editorWindow->UpdateScrollInfo();
 											  editorWindow->AdjustVertScrollingToCaretLine();
+											  editorWindow->UpdateCaretPosition();
 
 											  InvalidateRect(hWnd, &editorWindow->textAreaEditRect_, TRUE);
 						 } break;
